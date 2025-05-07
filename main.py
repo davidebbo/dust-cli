@@ -199,6 +199,7 @@ def prompt_agent(agent_id, user_prompt):
         add_to_conversation(agent_id, user_prompt)
 
 def main():
+    global conversationId
     while True:
         try:
             command_input = input("dust-cli> ").strip()
@@ -209,22 +210,30 @@ def main():
             if command.startswith("@"):
                 agent_id = command[1:]
                 user_prompt = " ".join(command_parts[1:])
-                prompt_agent(agent_id, user_prompt)
+                create_new_conversation(agent_id, user_prompt)
                 continue
-            if command == "exit":
-                break
-            elif command == "list-agents":
-                list_agents()
-            elif command == "get-agent":
-                if len(command_parts) > 1:
-                    agent_id = command_parts[1]
-                    get_agent_details(agent_id)
+            if command.startswith("\\"):
+                command = command[1:]  # Remove the leading backslash
+                if command == "exit":
+                    break
+                elif command == "agents":
+                    list_agents()
+                elif command == "agent":
+                    if len(command_parts) > 1:
+                        agent_id = command_parts[1]
+                        get_agent_details(agent_id)
+                    else:
+                        print("Usage: get-agent <agent_id>")
                 else:
-                    print("Usage: get-agent <agent_id>")
+                    print(f"Unknown command: {command}")
             elif command == "":
                 continue  # Handle empty input
             else:
-                print(f"Unknown command: {command}")
+                if conversationId is None:
+                    print("No conversation started. Use @agentname <prompt> to start a conversation.")
+                else:
+                    user_prompt = command_input
+                    prompt_agent(agent_id, user_prompt)
         except KeyboardInterrupt:
             print("\nExiting...")
             break
