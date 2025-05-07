@@ -153,6 +153,12 @@ def main():
             command_parts = command_input.split()
             command = command_parts[0] if command_parts else ""
 
+            # If it starts with @agentname, treat it as an ask-agent command
+            if command.startswith("@"):
+                agent_id = command[1:]
+                user_prompt = " ".join(command_parts[1:])
+                ask_agent(agent_id, user_prompt)
+                continue
             if command == "exit":
                 break
             elif command == "list-agents":
@@ -163,13 +169,6 @@ def main():
                     get_agent_details(agent_id)
                 else:
                     print("Usage: get-agent <agent_id>")
-            elif command == "ask-agent":
-                if len(command_parts) > 2:
-                    agent_id = command_parts[1]
-                    user_prompt = " ".join(command_parts[2:])
-                    ask_agent(agent_id, user_prompt)
-                else:
-                    print("Usage: ask-agent <agent_id> <prompt>")
             elif command == "":
                 continue  # Handle empty input
             else:
