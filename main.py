@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import requests
 from dotenv import load_dotenv
@@ -95,6 +96,56 @@ def get_agent_details(agent_id):
         print(f"Error fetching details for agent {agent_id}: {e}")
 
 
+def ask_agent(agent_id, user_prompt):
+    url = f"{dust_url}/api/v1/w/{wld}/assistant/conversations"
+    headers = _get_auth_headers()
+    data = {
+        "message": {
+            "content": user_prompt,
+            "mentions": [
+                {
+                    "configurationId": agent_id
+                }
+            ],
+            "context": {
+                "username": "dust-cli-user",  # Or any other identifier
+                "timezone": "Europe/Paris"  # Or dynamically get timezone
+            }
+        },
+        "blocking": True
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        response_data = response.json()
+
+        agent_reply = None
+        if response_data.get("conversation") and response_data["conversation"].get("content"):
+            for message_group in response_data["conversation"]["content"]:
+                for message in message_group:
+                    if message.get("type") == "agent_message" and "content" in message:
+                        agent_reply = message["content"]
+                        break
+                if agent_reply:
+                    break
+        
+        if agent_reply:
+            print(f"Agent ({agent_id}): {agent_reply}")
+        else:
+            print("No agent reply found in the response.")
+            # print("Full response for debugging:")
+            # import json
+            # print(json.dumps(response_data, indent=2))
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error asking agent {agent_id}: {e}")
+        if e.response is not None:
+            print(f"Response content: {e.response.text}")
+    except json.JSONDecodeError:
+        print("Error decoding JSON response from server.")
+
+
 def main():
     while True:
         try:
@@ -112,6 +163,13 @@ def main():
                     get_agent_details(agent_id)
                 else:
                     print("Usage: get-agent <agent_id>")
+            elif command == "ask-agent":
+                if len(command_parts) > 2:
+                    agent_id = command_parts[1]
+                    user_prompt = " ".join(command_parts[2:])
+                    ask_agent(agent_id, user_prompt)
+                else:
+                    print("Usage: ask-agent <agent_id> <prompt>")
             elif command == "":
                 continue  # Handle empty input
             else:
