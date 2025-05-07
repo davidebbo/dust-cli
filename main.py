@@ -2,6 +2,7 @@ import argparse
 import os
 import requests
 from dotenv import load_dotenv
+import readline
 
 load_dotenv()
 
@@ -72,7 +73,7 @@ def list_agents():
         agents = response.json()
         print("Available agents:")
         for agent in agents['agentConfigurations']:
-            print(f"{agent['sId']}")
+            print(f"{agent['sId']}: {agent['name']}")
     except requests.exceptions.RequestException as e:
         print(f"Error fetching agents: {e}")
 
@@ -98,7 +99,7 @@ def main():
     while True:
         try:
             command_input = input("dust-cli> ").strip()
-            command_parts = command_input.lower().split()
+            command_parts = command_input.split()
             command = command_parts[0] if command_parts else ""
 
             if command == "exit":
