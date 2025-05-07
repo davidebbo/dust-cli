@@ -22,27 +22,6 @@ def get_auth_headers():
     }
 
 
-def get_existing_dust_files():
-    url = f"{dust_url}/api/v1/w/{wld}/spaces/{space_id}/data_sources/{dsId}/documents"
-    response = requests.get(url, headers={"Authorization": f"Bearer {dust_token}"})  # Note: get_existing_dust_files only needs Authorization
-
-    # Response looks like this:
-    # {
-    #     "documents": [
-    #       {
-    #         "document_id": "doc1",
-    #         etc...
-    #       },
-    #       {
-    #         "document_id": "doc2"
-    #       }
-    #     ]
-    # }
-
-    # Put the document_id for all the docs into a set
-    return set(doc["document_id"] for doc in response.json()["documents"])
-
-
 def upload_file(file_path, file_name):
     # Read the file content
     with open(file_path, "r") as file:
@@ -74,7 +53,7 @@ def list_agents():
         response.raise_for_status()  # Raise an exception for 4XX/5XX responses
         agents = response.json()
         print("Available agents:")
-        for agent in agents['agentConfigurations']:
+        for agent in agents["agentConfigurations"]:
             print(f"{agent['sId']}: {agent['name']}")
     except requests.exceptions.RequestException as e:
         print(f"Error fetching agents: {e}")
@@ -92,6 +71,7 @@ def get_agent_details(agent_id):
         # Assuming the response JSON is the agent configuration object itself
         # You might want to pretty-print it or extract specific fields
         import json
+
         print(json.dumps(agent_details, indent=2))
     except requests.exceptions.RequestException as e:
         print(f"Error fetching details for agent {agent_id}: {e}")
@@ -104,17 +84,13 @@ def create_new_conversation(agent_id, user_prompt):
     data = {
         "message": {
             "content": user_prompt,
-            "mentions": [
-                {
-                    "configurationId": agent_id
-                }
-            ],
+            "mentions": [{"configurationId": agent_id}],
             "context": {
                 "username": "dust-cli-user",  # Or any other identifier
-                "timezone": "Europe/Paris"  # Or dynamically get timezone
-            }
+                "timezone": "Europe/Paris",  # Or dynamically get timezone
+            },
         },
-        "blocking": True
+        "blocking": True,
     }
 
     try:
@@ -123,7 +99,9 @@ def create_new_conversation(agent_id, user_prompt):
         response_data = response.json()
 
         agent_reply = None
-        if response_data.get("conversation") and response_data["conversation"].get("content"):
+        if response_data.get("conversation") and response_data["conversation"].get(
+            "content"
+        ):
             for message_group in response_data["conversation"]["content"]:
                 for message in message_group:
                     if message.get("type") == "agent_message" and "content" in message:
@@ -131,7 +109,7 @@ def create_new_conversation(agent_id, user_prompt):
                         break
                 if agent_reply:
                     break
-        
+
         if agent_reply:
             print(f"Agent ({agent_id}): {agent_reply}")
             conversationId = response_data["conversation"]["sId"]
@@ -176,7 +154,7 @@ def add_to_conversation(agent_id, user_prompt):
                     break
                 if agent_reply:
                     break
-        
+
         if agent_reply:
             print(f"Agent ({agent_id}): {agent_reply}")
         else:
@@ -192,12 +170,14 @@ def add_to_conversation(agent_id, user_prompt):
     except json.JSONDecodeError:
         print("Error decoding JSON response from server.")
 
+
 def prompt_agent(agent_id, user_prompt):
     global conversationId
     if conversationId is None:
         create_new_conversation(agent_id, user_prompt)
     else:
         add_to_conversation(agent_id, user_prompt)
+
 
 def main():
     global conversationId
@@ -231,7 +211,9 @@ def main():
                 continue  # Handle empty input
             else:
                 if conversationId is None:
-                    print("No conversation started. Use @agentname <prompt> to start a conversation.")
+                    print(
+                        "No conversation started. Use @agentname <prompt> to start a conversation."
+                    )
                 else:
                     user_prompt = command_input
                     prompt_agent(agent_id, user_prompt)
