@@ -1,9 +1,7 @@
-import argparse
 import json
 import os
 import requests
 from dotenv import load_dotenv
-import readline
 
 load_dotenv()
 
@@ -13,8 +11,10 @@ space_id = os.getenv("SPACE_ID")
 dsId = os.getenv("DSID")
 dust_url = os.getenv("DUST_URL")
 
+conversationId = None
 
-def _get_auth_headers():
+
+def get_auth_headers():
     return {
         "Authorization": f"Bearer {dust_token}",
         "Content-Type": "application/json",
@@ -48,7 +48,7 @@ def upload_file(file_path, file_name):
         file_content = file.read()
 
     url = f"{dust_url}/api/v1/w/{wld}/spaces/{space_id}/data_sources/{dsId}/documents/{file_name}"
-    headers = _get_auth_headers()
+    headers = get_auth_headers()
     data = {
         "title": file_name,
         "mime_type": "text/plain",
@@ -66,7 +66,7 @@ def upload_file(file_path, file_name):
 
 def list_agents():
     url = f"{dust_url}/api/v1/w/{wld}/assistant/agent_configurations"
-    headers = _get_auth_headers()
+    headers = get_auth_headers()
 
     try:
         response = requests.get(url, headers=headers)
@@ -81,7 +81,7 @@ def list_agents():
 
 def get_agent_details(agent_id):
     url = f"{dust_url}/api/v1/w/{wld}/assistant/agent_configurations/{agent_id}"
-    headers = _get_auth_headers()
+    headers = get_auth_headers()
 
     try:
         response = requests.get(url, headers=headers)
@@ -96,9 +96,10 @@ def get_agent_details(agent_id):
         print(f"Error fetching details for agent {agent_id}: {e}")
 
 
-def ask_agent(agent_id, user_prompt):
+def create_new_conversation(agent_id, user_prompt):
+    global conversationId
     url = f"{dust_url}/api/v1/w/{wld}/assistant/conversations"
-    headers = _get_auth_headers()
+    headers = get_auth_headers()
     data = {
         "message": {
             "content": user_prompt,
@@ -132,6 +133,7 @@ def ask_agent(agent_id, user_prompt):
         
         if agent_reply:
             print(f"Agent ({agent_id}): {agent_reply}")
+            conversationId = response_data["conversation"]["sId"]
         else:
             print("No agent reply found in the response.")
             # print("Full response for debugging:")
@@ -146,6 +148,56 @@ def ask_agent(agent_id, user_prompt):
         print("Error decoding JSON response from server.")
 
 
+def add_to_conversation(agent_id, user_prompt):
+    global conversationId
+    url = f"{dust_url}/api/v1/w/{wld}/assistant/conversations/{conversationId}/messages"
+    headers = get_auth_headers()
+    data = {
+        "content": user_prompt,
+        "mentions": [{"configurationId": agent_id}],
+        "context": {
+            "username": "dust-cli-user",  # Or any other identifier
+            "timezone": "Europe/Paris",  # Or dynamically get timezone
+        },
+        "blocking": True,
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        response_data = response.json()
+
+        agent_reply = None
+        if response_data.get("agentMessages"):
+            for message in response_data["agentMessages"]:
+                if message.get("type") == "agent_message" and "content" in message:
+                    agent_reply = message["content"]
+                    break
+                if agent_reply:
+                    break
+        
+        if agent_reply:
+            print(f"Agent ({agent_id}): {agent_reply}")
+        else:
+            print("No agent reply found in the response.")
+            # print("Full response for debugging:")
+            # import json
+            # print(json.dumps(response_data, indent=2))
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error asking agent {agent_id}: {e}")
+        if e.response is not None:
+            print(f"Response content: {e.response.text}")
+    except json.JSONDecodeError:
+        print("Error decoding JSON response from server.")
+
+def prompt_agent(agent_id, user_prompt):
+    global conversationId
+    if conversationId is None:
+        create_new_conversation(agent_id, user_prompt)
+    else:
+        add_to_conversation(agent_id, user_prompt)
+
 def main():
     while True:
         try:
@@ -153,11 +205,11 @@ def main():
             command_parts = command_input.split()
             command = command_parts[0] if command_parts else ""
 
-            # If it starts with @agentname, treat it as an ask-agent command
+            # If it starts with @agentname, treat it as an agent command
             if command.startswith("@"):
                 agent_id = command[1:]
                 user_prompt = " ".join(command_parts[1:])
-                ask_agent(agent_id, user_prompt)
+                prompt_agent(agent_id, user_prompt)
                 continue
             if command == "exit":
                 break
