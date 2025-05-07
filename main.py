@@ -9,11 +9,19 @@ dust_token = os.getenv("DUST_TOKEN")
 wld = os.getenv("WLD")
 space_id = os.getenv("SPACE_ID")
 dsId = os.getenv("DSID")
+dust_url = os.getenv("DUST_URL")
+
+
+def _get_auth_headers():
+    return {
+        "Authorization": f"Bearer {dust_token}",
+        "Content-Type": "application/json",
+    }
 
 
 def get_existing_dust_files():
-    url = f"https://dust.tt/api/v1/w/{wld}/spaces/{space_id}/data_sources/{dsId}/documents"
-    response = requests.get(url, headers={"Authorization": f"Bearer {dust_token}"})
+    url = f"{dust_url}/api/v1/w/{wld}/spaces/{space_id}/data_sources/{dsId}/documents"
+    response = requests.get(url, headers={"Authorization": f"Bearer {dust_token}"})  # Note: get_existing_dust_files only needs Authorization
 
     # Response looks like this:
     # {
@@ -37,11 +45,8 @@ def upload_file(file_path, file_name):
     with open(file_path, "r") as file:
         file_content = file.read()
 
-    url = f"https://dust.tt/api/v1/w/{wld}/spaces/{space_id}/data_sources/{dsId}/documents/{file_name}"
-    headers = {
-        "Authorization": f"Bearer {dust_token}",
-        "Content-Type": "application/json",
-    }
+    url = f"{dust_url}/api/v1/w/{wld}/spaces/{space_id}/data_sources/{dsId}/documents/{file_name}"
+    headers = _get_auth_headers()
     data = {
         "title": file_name,
         "mime_type": "text/plain",
@@ -56,13 +61,10 @@ def upload_file(file_path, file_name):
     except requests.exceptions.RequestException as e:
         print(f"Error uploading {file_name}: {e}")
 
-def list_agents():
-    url = f"https://dust.tt/api/v1/w/{wld}/assistant/agent_configurations"
 
-    headers = {
-        "Authorization": f"Bearer {dust_token}",
-        "Content-Type": "application/json",
-    }
+def list_agents():
+    url = f"{dust_url}/api/v1/w/{wld}/assistant/agent_configurations"
+    headers = _get_auth_headers()
 
     try:
         response = requests.get(url, headers=headers)
@@ -75,51 +77,24 @@ def list_agents():
         print(f"Error fetching agents: {e}")
 
 
-def get_markdown_files(folder_path):
-    markdown_files = []
-
-    if not os.path.isdir(folder_path):
-        print(f"Error: {folder_path} is not a valid directory.")
-        return markdown_files
-
-    # Walk through all files in the directory
-    for root, _, files in os.walk(folder_path):
-        for file in files:
-            if file.endswith(".md"):
-                file_path = os.path.join(root, file)
-                markdown_files.append(file_path)
-
-    # Sort files alphabetically for consistent ordering
-    markdown_files.sort()
-
-    return markdown_files
-
-
-def upload_all_files(args):
-    markdown_files = get_markdown_files(args.inputfolder)
-    existing_files = get_existing_dust_files()
-    for file_path in markdown_files:
-        file_name_with_extension = os.path.basename(file_path)
-        file_name, _ = os.path.splitext(file_name_with_extension)
-        if file_name not in existing_files:
-            upload_file(file_path, file_name)
-        else:
-            print(f"{file_name} already exists in Dust.")
-
-
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    # parser.add_argument(
-    #     "inputfolder",
-    #     type=str,
-    #     help="Folder containing markdown files to upload",
-    # )
-
-    # args = parser.parse_args()
-
-    list_agents()
-
-    # upload_all_files(args)
+    while True:
+        try:
+            command = input("dust-cli> ").strip().lower()
+            if command == "exit":
+                break
+            elif command == "list-agents":
+                list_agents()
+            elif command == "":
+                continue  # Handle empty input
+            else:
+                print(f"Unknown command: {command}")
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            break
+        except EOFError:  # Handle Ctrl+D
+            print("\nExiting...")
+            break
 
 
 if __name__ == "__main__":
