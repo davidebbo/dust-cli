@@ -1,6 +1,7 @@
 import json
 import os
 import requests
+import readline
 from dotenv import load_dotenv
 
 load_dotenv()
