@@ -72,19 +72,45 @@ def list_agents():
         agents = response.json()
         print("Available agents:")
         for agent in agents['agentConfigurations']:
-            print(f"Agent ID: {agent['sId']}, Name: {agent['instructions']}")
+            print(f"{agent['sId']}")
     except requests.exceptions.RequestException as e:
         print(f"Error fetching agents: {e}")
+
+
+def get_agent_details(agent_id):
+    url = f"{dust_url}/api/v1/w/{wld}/assistant/agent_configurations/{agent_id}"
+    headers = _get_auth_headers()
+
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+        agent_details = response.json()
+        print(f"Details for agent {agent_id}:")
+        # Assuming the response JSON is the agent configuration object itself
+        # You might want to pretty-print it or extract specific fields
+        import json
+        print(json.dumps(agent_details, indent=2))
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching details for agent {agent_id}: {e}")
 
 
 def main():
     while True:
         try:
-            command = input("dust-cli> ").strip().lower()
+            command_input = input("dust-cli> ").strip()
+            command_parts = command_input.lower().split()
+            command = command_parts[0] if command_parts else ""
+
             if command == "exit":
                 break
             elif command == "list-agents":
                 list_agents()
+            elif command == "get-agent":
+                if len(command_parts) > 1:
+                    agent_id = command_parts[1]
+                    get_agent_details(agent_id)
+                else:
+                    print("Usage: get-agent <agent_id>")
             elif command == "":
                 continue  # Handle empty input
             else:
