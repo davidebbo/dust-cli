@@ -59,12 +59,22 @@ def upload_file(file_path):
     # Upload the file to the provided URL using a POST, with a form-data body and the file as the payload under the key "file"
     try:
         with open(file_path, "rb") as file:
-            files = {"file": file}
+            # Determine content type based on file extension
+            content_type = "application/octet-stream"  # Default type
+            file_ext = os.path.splitext(file_name)[1].lower()
+            if file_ext in ['.jpg', '.jpeg']:
+                content_type = "image/jpeg"
+            elif file_ext == '.png':
+                content_type = "image/png"
+            elif file_ext == '.pdf':
+                content_type = "application/pdf"
+            elif file_ext == '.txt':
+                content_type = "text/plain"
+            
+            files = {"file": (file_name, file, content_type)}
             # The requests library automatically uses multipart/form-data when 'files' parameter is used
-            headers=get_auth_headers()
-            response = requests.post(
-                upload_url, headers=headers, files=files
-            )
+            headers = get_auth_headers()
+            response = requests.post(upload_url, headers=headers, files=files)
             response.raise_for_status()  # Raise an exception for 4XX/5XX responses
             print(f"File {file_name} uploaded successfully.")
     except requests.exceptions.RequestException as e:
@@ -128,7 +138,6 @@ def get_agent_details(agent_id):
         print(f"Details for agent {agent_id}:")
         # Assuming the response JSON is the agent configuration object itself
         # You might want to pretty-print it or extract specific fields
-        import json
 
         print(json.dumps(agent_details, indent=2))
     except requests.exceptions.RequestException as e:
