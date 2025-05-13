@@ -21,14 +21,12 @@ def get_standard_headers():
         "Content-Type": "application/json",
     }
 
+
 def get_auth_headers():
-    return {
-        "Authorization": f"Bearer {dust_token}"
-    }
+    return {"Authorization": f"Bearer {dust_token}"}
 
 
 def upload_file(file_path):
-
     try:
         file_name = os.path.basename(file_path)
         file_size = os.path.getsize(file_path)
@@ -55,22 +53,22 @@ def upload_file(file_path):
         print(f"Upload URL: {upload_url}")
     except requests.exceptions.RequestException as e:
         print(f"Error uploading {file_name}: {e}")
-    
+
     # Upload the file to the provided URL using a POST, with a form-data body and the file as the payload under the key "file"
     try:
         with open(file_path, "rb") as file:
             # Determine content type based on file extension
             content_type = "application/octet-stream"  # Default type
             file_ext = os.path.splitext(file_name)[1].lower()
-            if file_ext in ['.jpg', '.jpeg']:
+            if file_ext in [".jpg", ".jpeg"]:
                 content_type = "image/jpeg"
-            elif file_ext == '.png':
+            elif file_ext == ".png":
                 content_type = "image/png"
-            elif file_ext == '.pdf':
+            elif file_ext == ".pdf":
                 content_type = "application/pdf"
-            elif file_ext == '.txt':
+            elif file_ext == ".txt":
                 content_type = "text/plain"
-            
+
             files = {"file": (file_name, file, content_type)}
             # The requests library automatically uses multipart/form-data when 'files' parameter is used
             headers = get_auth_headers()
@@ -83,7 +81,6 @@ def upload_file(file_path):
 
     return
 
-
     try:
         # Read the file content
         with open(file_path, "r") as file:
@@ -94,7 +91,7 @@ def upload_file(file_path):
     except Exception as e:
         print(f"Error reading file {file_path}: {e}")
         return
-    
+
     url = f"{dust_url}/api/v1/w/{wld}/spaces/{space_id}/data_sources/{dsId}/documents/{file_name}"
     headers = get_standard_headers()
     data = {
