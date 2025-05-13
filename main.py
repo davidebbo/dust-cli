@@ -15,20 +15,78 @@ dust_url = os.getenv("DUST_URL")
 conversationId = None
 
 
-def get_auth_headers():
+def get_standard_headers():
     return {
         "Authorization": f"Bearer {dust_token}",
         "Content-Type": "application/json",
     }
 
+def get_auth_headers():
+    return {
+        "Authorization": f"Bearer {dust_token}"
+    }
 
-def upload_file(file_path, file_name):
-    # Read the file content
-    with open(file_path, "r") as file:
-        file_content = file.read()
 
+def upload_file(file_path):
+
+    try:
+        file_name = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path)
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        return
+    except Exception as e:
+        print(f"Error reading file {file_path}: {e}")
+        return
+
+    url = f"{dust_url}/api/v1/w/{wld}/files"
+    headers = get_standard_headers()
+    data = {
+        "contentType": "image/jpeg",
+        "fileName": file_name,
+        "fileSize": file_size,
+        "useCase": "conversation",
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+        upload_url = response.json()["file"]["uploadUrl"]
+        print(f"Upload URL: {upload_url}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error uploading {file_name}: {e}")
+    
+    # Upload the file to the provided URL using a POST, with a form-data body and the file as the payload under the key "file"
+    try:
+        with open(file_path, "rb") as file:
+            files = {"file": file}
+            # The requests library automatically uses multipart/form-data when 'files' parameter is used
+            headers=get_auth_headers()
+            response = requests.post(
+                upload_url, headers=headers, files=files
+            )
+            response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+            print(f"File {file_name} uploaded successfully.")
+    except requests.exceptions.RequestException as e:
+        print(f"Error uploading file {file_name}: {e}")
+        return
+
+    return
+
+
+    try:
+        # Read the file content
+        with open(file_path, "r") as file:
+            file_content = file.read()
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        return
+    except Exception as e:
+        print(f"Error reading file {file_path}: {e}")
+        return
+    
     url = f"{dust_url}/api/v1/w/{wld}/spaces/{space_id}/data_sources/{dsId}/documents/{file_name}"
-    headers = get_auth_headers()
+    headers = get_standard_headers()
     data = {
         "title": file_name,
         "mime_type": "text/plain",
@@ -46,7 +104,7 @@ def upload_file(file_path, file_name):
 
 def list_agents():
     url = f"{dust_url}/api/v1/w/{wld}/assistant/agent_configurations"
-    headers = get_auth_headers()
+    headers = get_standard_headers()
 
     try:
         response = requests.get(url, headers=headers)
@@ -61,7 +119,7 @@ def list_agents():
 
 def get_agent_details(agent_id):
     url = f"{dust_url}/api/v1/w/{wld}/assistant/agent_configurations/{agent_id}"
-    headers = get_auth_headers()
+    headers = get_standard_headers()
 
     try:
         response = requests.get(url, headers=headers)
@@ -80,7 +138,7 @@ def get_agent_details(agent_id):
 def create_new_conversation(agent_id, user_prompt):
     global conversationId
     url = f"{dust_url}/api/v1/w/{wld}/assistant/conversations"
-    headers = get_auth_headers()
+    headers = get_standard_headers()
     data = {
         "message": {
             "content": user_prompt,
@@ -130,7 +188,7 @@ def create_new_conversation(agent_id, user_prompt):
 def add_to_conversation(agent_id, user_prompt):
     global conversationId
     url = f"{dust_url}/api/v1/w/{wld}/assistant/conversations/{conversationId}/messages"
-    headers = get_auth_headers()
+    headers = get_standard_headers()
     data = {
         "content": user_prompt,
         "mentions": [{"configurationId": agent_id}],
@@ -205,6 +263,12 @@ def main():
                         get_agent_details(agent_id)
                     else:
                         print("Usage: get-agent <agent_id>")
+                elif command == "upload":
+                    if len(command_parts) > 1:
+                        file_path = command_parts[1]
+                        upload_file(file_path)
+                    else:
+                        print("Usage: upload <file_path>")
                 else:
                     print(f"Unknown command: {command}")
             elif command == "":
