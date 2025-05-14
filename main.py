@@ -1,92 +1,100 @@
 import json
 import mimetypes
-import os
+from pathlib import Path
 import requests
 import readline
+from typing import Optional, Dict, Any
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
-dust_token = os.getenv("DUST_TOKEN")
-wld = os.getenv("WLD")
-space_id = os.getenv("SPACE_ID")
-dsId = os.getenv("DSID")
-dust_url = os.getenv("DUST_URL")
+dust_token = os.getenv("DUST_TOKEN", "")
+wld = os.getenv("WLD", "")
+space_id = os.getenv("SPACE_ID", "")
+dsId = os.getenv("DSID", "")
+dust_url = os.getenv("DUST_URL", "https://dust.tt")
 
 conversationId = None
+fileId = None
 
 
-def get_standard_headers():
+def get_standard_headers() -> Dict[str, str]:
     return {
         "Authorization": f"Bearer {dust_token}",
         "Content-Type": "application/json",
     }
 
 
-def get_auth_headers():
+def get_auth_headers() -> Dict[str, str]:
     return {"Authorization": f"Bearer {dust_token}"}
 
 
-def get_file_upload_url(file_path, content_type):
-    try:
-        file_size = os.path.getsize(file_path)
-    except FileNotFoundError:
+def get_file_upload_url(file_path: str, content_type: str) -> Optional[str]:
+    path = Path(file_path)
+    
+    if not path.exists():
         print(f"File not found: {file_path}")
-        return
+        return None
+        
+    try:
+        file_size = path.stat().st_size
+    except OSError as e:
+        print(f"Error accessing file {file_path}: {e}")
+        return None
 
     url = f"{dust_url}/api/v1/w/{wld}/files"
     headers = get_standard_headers()
     data = {
         "contentType": content_type,
-        "fileName": os.path.basename(file_path),
+        "fileName": path.name,
         "fileSize": file_size,
         "useCase": "conversation",
     }
 
     try:
         response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+        response.raise_for_status()
         return response.json()["file"]["uploadUrl"]
     except requests.exceptions.RequestException as e:
         print(f"Error getting upload URL for {file_path}: {e}")
+        return None
 
 
-def upload_file(file_path, upload_url, content_type):
-    # Upload the file to the provided URL using a POST, with a form-data body and the file as the payload under the key "file"
+def upload_file(file_path: str, upload_url: str, content_type: str) -> Optional[str]:
+    path = Path(file_path)
     try:
-        with open(file_path, "rb") as file:
-            files = {"file": (os.path.basename(file_path), file, content_type)}
-            # The requests library automatically uses multipart/form-data when 'files' parameter is used
+        with path.open("rb") as file:
+            files = {"file": (path.name, file, content_type)}
             headers = get_auth_headers()
             response = requests.post(upload_url, headers=headers, files=files)
-            response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+            response.raise_for_status()
             print(f"File {file_path} uploaded successfully.")
+            return response.json()["file"]["sId"]
     except requests.exceptions.RequestException as e:
         print(f"Error uploading file {file_path}: {e}")
-        return
-
-    return response.json()["file"]["sId"]
+        return None
 
 
-def upload_and_attach_file(file_path):
+def upload_and_attach_file(file_path: str) -> None:
     # Figure out the content type from the extension
-    content_type = mimetypes.guess_type(os.path.basename(file_path))[0]
+    content_type = mimetypes.guess_type(Path(file_path).name)[0]
 
     # Get a URL that the file can be uploaded to
     upload_url = get_file_upload_url(file_path, content_type)
-
+    
     # Upload the file to that URL
     global fileId
     fileId = upload_file(file_path, upload_url, content_type)
 
 
-def list_agents():
+def list_agents() -> None:
     url = f"{dust_url}/api/v1/w/{wld}/assistant/agent_configurations"
     headers = get_standard_headers()
 
     try:
         response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+        response.raise_for_status()
         agents = response.json()
         print("Available agents:")
         for agent in agents["agentConfigurations"]:
@@ -95,36 +103,33 @@ def list_agents():
         print(f"Error fetching agents: {e}")
 
 
-def get_agent_details(agent_id):
+def get_agent_details(agent_id: str) -> None:
     url = f"{dust_url}/api/v1/w/{wld}/assistant/agent_configurations/{agent_id}"
     headers = get_standard_headers()
 
     try:
         response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
+        response.raise_for_status()
         agent_details = response.json()
         print(f"Details for agent {agent_id}:")
-        # Assuming the response JSON is the agent configuration object itself
-        # You might want to pretty-print it or extract specific fields
-
         print(json.dumps(agent_details, indent=2))
     except requests.exceptions.RequestException as e:
         print(f"Error fetching details for agent {agent_id}: {e}")
 
 
-def create_new_conversation(agent_id, user_prompt):
+def create_new_conversation(agent_id: str, user_prompt: str) -> None:
     global conversationId
     global fileId
 
     url = f"{dust_url}/api/v1/w/{wld}/assistant/conversations"
     headers = get_standard_headers()
-    data = {
+    data: Dict[str, Any] = {
         "message": {
             "content": user_prompt,
             "mentions": [{"configurationId": agent_id}],
             "context": {
-                "username": "dust-cli-user",  # Or any other identifier
-                "timezone": "Europe/Paris",  # Or dynamically get timezone
+                "username": "dust-cli-user",
+                "timezone": "Europe/Paris",
             },
         },
         "blocking": True,
@@ -155,9 +160,6 @@ def create_new_conversation(agent_id, user_prompt):
             conversationId = response_data["conversation"]["sId"]
         else:
             print("No agent reply found in the response.")
-            # print("Full response for debugging:")
-            # import json
-            # print(json.dumps(response_data, indent=2))
 
     except requests.exceptions.RequestException as e:
         print(f"Error asking agent {agent_id}: {e}")
@@ -167,7 +169,7 @@ def create_new_conversation(agent_id, user_prompt):
         print("Error decoding JSON response from server.")
 
 
-def add_to_conversation(agent_id, user_prompt):
+def add_to_conversation(agent_id: str, user_prompt: str) -> None:
     global conversationId
     url = f"{dust_url}/api/v1/w/{wld}/assistant/conversations/{conversationId}/messages"
     headers = get_standard_headers()
@@ -175,8 +177,8 @@ def add_to_conversation(agent_id, user_prompt):
         "content": user_prompt,
         "mentions": [{"configurationId": agent_id}],
         "context": {
-            "username": "dust-cli-user",  # Or any other identifier
-            "timezone": "Europe/Paris",  # Or dynamically get timezone
+            "username": "dust-cli-user",
+            "timezone": "Europe/Paris",
         },
         "blocking": True,
     }
@@ -199,9 +201,6 @@ def add_to_conversation(agent_id, user_prompt):
             print(f"Agent ({agent_id}): {agent_reply}")
         else:
             print("No agent reply found in the response.")
-            # print("Full response for debugging:")
-            # import json
-            # print(json.dumps(response_data, indent=2))
 
     except requests.exceptions.RequestException as e:
         print(f"Error asking agent {agent_id}: {e}")
@@ -211,7 +210,7 @@ def add_to_conversation(agent_id, user_prompt):
         print("Error decoding JSON response from server.")
 
 
-def prompt_agent(agent_id, user_prompt):
+def prompt_agent(agent_id: str, user_prompt: str) -> None:
     global conversationId
     if conversationId is None:
         create_new_conversation(agent_id, user_prompt)
@@ -219,7 +218,7 @@ def prompt_agent(agent_id, user_prompt):
         add_to_conversation(agent_id, user_prompt)
 
 
-def main():
+def main() -> None:
     global conversationId
     while True:
         try:
@@ -254,7 +253,7 @@ def main():
                 else:
                     print(f"Unknown command: {command}")
             elif command == "":
-                continue  # Handle empty input
+                continue
             else:
                 if conversationId is None:
                     print(
