@@ -1,4 +1,5 @@
 import json
+import mimetypes
 import os
 import requests
 import readline
@@ -26,22 +27,18 @@ def get_auth_headers():
     return {"Authorization": f"Bearer {dust_token}"}
 
 
-def upload_file(file_path):
+def get_file_upload_url(file_path, content_type):
     try:
-        file_name = os.path.basename(file_path)
         file_size = os.path.getsize(file_path)
     except FileNotFoundError:
         print(f"File not found: {file_path}")
-        return
-    except Exception as e:
-        print(f"Error reading file {file_path}: {e}")
         return
 
     url = f"{dust_url}/api/v1/w/{wld}/files"
     headers = get_standard_headers()
     data = {
-        "contentType": "image/jpeg",
-        "fileName": file_name,
+        "contentType": content_type,
+        "fileName": os.path.basename(file_path),
         "fileSize": file_size,
         "useCase": "conversation",
     }
@@ -49,64 +46,38 @@ def upload_file(file_path):
     try:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()  # Raise an exception for 4XX/5XX responses
-        upload_url = response.json()["file"]["uploadUrl"]
-        print(f"Upload URL: {upload_url}")
+        return response.json()["file"]["uploadUrl"]
     except requests.exceptions.RequestException as e:
-        print(f"Error uploading {file_name}: {e}")
+        print(f"Error getting upload URL for {file_path}: {e}")
 
+
+def upload_file(file_path, upload_url, content_type):
     # Upload the file to the provided URL using a POST, with a form-data body and the file as the payload under the key "file"
     try:
         with open(file_path, "rb") as file:
-            # Determine content type based on file extension
-            content_type = "application/octet-stream"  # Default type
-            file_ext = os.path.splitext(file_name)[1].lower()
-            if file_ext in [".jpg", ".jpeg"]:
-                content_type = "image/jpeg"
-            elif file_ext == ".png":
-                content_type = "image/png"
-            elif file_ext == ".pdf":
-                content_type = "application/pdf"
-            elif file_ext == ".txt":
-                content_type = "text/plain"
-
-            files = {"file": (file_name, file, content_type)}
+            files = {"file": (os.path.basename(file_path), file, content_type)}
             # The requests library automatically uses multipart/form-data when 'files' parameter is used
             headers = get_auth_headers()
             response = requests.post(upload_url, headers=headers, files=files)
             response.raise_for_status()  # Raise an exception for 4XX/5XX responses
-            print(f"File {file_name} uploaded successfully.")
+            print(f"File {file_path} uploaded successfully.")
     except requests.exceptions.RequestException as e:
-        print(f"Error uploading file {file_name}: {e}")
+        print(f"Error uploading file {file_path}: {e}")
         return
 
-    return
+    return response.json()["file"]["sId"]
 
-    try:
-        # Read the file content
-        with open(file_path, "r") as file:
-            file_content = file.read()
-    except FileNotFoundError:
-        print(f"File not found: {file_path}")
-        return
-    except Exception as e:
-        print(f"Error reading file {file_path}: {e}")
-        return
 
-    url = f"{dust_url}/api/v1/w/{wld}/spaces/{space_id}/data_sources/{dsId}/documents/{file_name}"
-    headers = get_standard_headers()
-    data = {
-        "title": file_name,
-        "mime_type": "text/plain",
-        "text": file_content,
-        "source_url": f"https://www.archives.gov/files/research/jfk/releases/2025/0318/{file_name}.pdf",
-    }
+def upload_and_attach_file(file_path):
+    # Figure out the content type from the extension
+    content_type = mimetypes.guess_type(os.path.basename(file_path))[0]
 
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        response.raise_for_status()  # Raise an exception for 4XX/5XX responses
-        print(f"Successfully uploaded {file_name}")
-    except requests.exceptions.RequestException as e:
-        print(f"Error uploading {file_name}: {e}")
+    # Get a URL that the file can be uploaded to
+    upload_url = get_file_upload_url(file_path, content_type)
+
+    # Upload the file to that URL
+    global fileId
+    fileId = upload_file(file_path, upload_url, content_type)
 
 
 def list_agents():
@@ -143,6 +114,8 @@ def get_agent_details(agent_id):
 
 def create_new_conversation(agent_id, user_prompt):
     global conversationId
+    global fileId
+
     url = f"{dust_url}/api/v1/w/{wld}/assistant/conversations"
     headers = get_standard_headers()
     data = {
@@ -156,6 +129,9 @@ def create_new_conversation(agent_id, user_prompt):
         },
         "blocking": True,
     }
+
+    if fileId is not None:
+        data["contentFragments"] = [{"title": "Some attached file", "fileId": fileId}]
 
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -272,7 +248,7 @@ def main():
                 elif command == "upload":
                     if len(command_parts) > 1:
                         file_path = command_parts[1]
-                        upload_file(file_path)
+                        upload_and_attach_file(file_path)
                     else:
                         print("Usage: upload <file_path>")
                 else:
