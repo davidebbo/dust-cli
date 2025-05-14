@@ -11,8 +11,6 @@ load_dotenv()
 
 dust_token = os.getenv("DUST_TOKEN", "")
 wld = os.getenv("WLD", "")
-space_id = os.getenv("SPACE_ID", "")
-dsId = os.getenv("DSID", "")
 dust_url = os.getenv("DUST_URL", "https://dust.tt")
 
 conversationId = None
